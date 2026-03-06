@@ -34,7 +34,7 @@ export function useWakeLock() {
   useEffect(() => {
     if (!wakeLock) return;
     const handler = async () => {
-      if (document.visibilityState === 'visible' && wakeLock) {
+      if (document.visibilityState === 'visible') {
         try {
           const lock = await navigator.wakeLock.request('screen');
           setWakeLock(lock);

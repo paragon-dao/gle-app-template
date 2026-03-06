@@ -62,9 +62,12 @@
   </div>
 
   <script>
+    // Configure your API endpoint. The default is a shared public instance.
+    // For production, deploy your own to avoid rate limits.
     const BAGLE_API = 'https://bagle-api.fly.dev';
     let samples = [];
     let capturing = false;
+    const MAX_SAMPLES = 10000;
 
     function startCapture() {
       samples = [];
@@ -90,6 +93,7 @@
 
     function onMotion(e) {
       if (!capturing) return;
+      if (samples.length >= MAX_SAMPLES) return;
       const a = e.accelerationIncludingGravity;
       if (!a) return;
 
@@ -140,19 +144,36 @@
     }
 
     async function encodeGait() {
-      const res = await fetch(`${BAGLE_API}/api/v1/encode`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ features: samples }),
-      });
-      const data = await res.json();
+      try {
+        const res = await fetch(`${BAGLE_API}/api/v1/encode`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'omit',
+          body: JSON.stringify({ features: samples }),
+        });
+        if (!res.ok) throw new Error(`Encode failed: ${res.status}`);
+        const data = await res.json();
+        if (!Array.isArray(data.encoding) || data.encoding.length !== 128) {
+          throw new Error('Invalid encoding response');
+        }
 
-      document.getElementById('resultCard').style.display = 'block';
-      document.getElementById('resultDim').textContent =
-        `${data.dim} coefficients = ${data.dim * 4} bytes`;
-      document.getElementById('resultLatency').textContent =
-        `Encoded ${samples.length} accelerometer samples in ${data.latency_ms}ms`;
+        document.getElementById('resultCard').style.display = 'block';
+        document.getElementById('resultDim').textContent =
+          `${data.dim} coefficients = ${data.dim * 4} bytes`;
+        document.getElementById('resultLatency').textContent =
+          `Encoded ${samples.length} accelerometer samples in ${data.latency_ms}ms`;
+      } catch (err) {
+        document.getElementById('resultCard').style.display = 'block';
+        document.getElementById('resultDim').textContent = 'Error';
+        document.getElementById('resultDim').style.color = '#f87171';
+        document.getElementById('resultLatency').textContent = err.message;
+      }
     }
+
+    // Cleanup motion listener on page unload
+    window.addEventListener('pagehide', () => {
+      if (capturing) stopCapture();
+    });
   </script>
 </body>
 </html>

@@ -35,7 +35,8 @@ export function useOfflineStorage() {
     tx.objectStore(ENCODINGS_STORE).add({
       encoding: Array.from(encoding),
       timestamp: Date.now(),
-      ...metadata,
+      label: metadata?.label || '',
+      source: metadata?.source || '',
     });
     return new Promise((resolve, reject) => {
       tx.oncomplete = resolve;
@@ -48,7 +49,12 @@ export function useOfflineStorage() {
     const tx = db.transaction(ENCODINGS_STORE, 'readonly');
     const req = tx.objectStore(ENCODINGS_STORE).getAll();
     return new Promise((resolve, reject) => {
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        const records = (req.result || []).filter(
+          r => Array.isArray(r.encoding) && typeof r.timestamp === 'number'
+        );
+        resolve(records);
+      };
       req.onerror = () => reject(req.error);
     });
   }, []);

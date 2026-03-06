@@ -1,8 +1,13 @@
 import { useState, useCallback } from 'react';
 
-const BAGLE_API = 'https://bagle-api.fly.dev';
+const BAGLE_API = (import.meta.env?.VITE_BAGLE_API_URL || 'https://bagle-api.fly.dev').replace(/\/$/, '');
 
 /**
+ * WARNING — PRIVACY: This hook sends raw sensor data to an external server
+ * (bagle-api.fly.dev) for encoding. If your app handles sensitive biometric
+ * data, consider using @paragon-dao/bagle-sdk for on-device encoding instead,
+ * so that raw samples never leave the user's machine.
+ *
  * Hook for encoding signals and comparing encodings via BAGLE API.
  *
  * Two options:
@@ -23,12 +28,19 @@ export function useBagle() {
       const res = await fetch(`${BAGLE_API}/api/v1/encode`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'omit',
         body: JSON.stringify({ features: Array.from(samples) }),
       });
 
       if (!res.ok) throw new Error(`Encode failed: ${res.status}`);
 
       const data = await res.json();
+
+      if (!Array.isArray(data.encoding) || data.encoding.length !== 128 ||
+          !data.encoding.every(v => Number.isFinite(v))) {
+        throw new Error('Invalid encoding response: expected 128 finite numbers');
+      }
+
       setEncoding(data.encoding);
       return data;
     } catch (err) {
@@ -44,6 +56,7 @@ export function useBagle() {
       const res = await fetch(`${BAGLE_API}/api/v1/similarity`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'omit',
         body: JSON.stringify({
           encoding_a: Array.from(encodingA),
           encoding_b: Array.from(encodingB),
@@ -53,6 +66,11 @@ export function useBagle() {
       if (!res.ok) throw new Error(`Similarity failed: ${res.status}`);
 
       const data = await res.json();
+
+      if (!Number.isFinite(data.similarity)) {
+        throw new Error('Invalid similarity response: expected a finite number');
+      }
+
       setSimilarity(data);
       return data;
     } catch (err) {

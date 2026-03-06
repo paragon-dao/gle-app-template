@@ -7,6 +7,8 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // NOTE: Icon files (icon-192.png, icon-512.png, etc.) must be provided
+      // by the builder in the public/ directory. The template does not ship them.
       includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
       manifest: {
         name: 'My GLE Health App',
@@ -60,7 +62,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/bagle-api\.fly\.dev/,
+            urlPattern: /^https:\/\/bagle-api\.fly\.dev\/health$/,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'bagle-api-cache',

@@ -51,6 +51,8 @@
   </div>
 
   <script>
+    // Configure your API endpoint. The default is a shared public instance.
+    // For production, deploy your own to avoid rate limits.
     const BAGLE_API = 'https://bagle-api.fly.dev';
     let intervals = [];
     let lastKeyTime = null;
@@ -75,18 +77,30 @@
       const res = await fetch(`${BAGLE_API}/api/v1/encode`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'omit',
         body: JSON.stringify({ features: data }),
       });
-      return res.json();
+      if (!res.ok) throw new Error(`Encode failed: ${res.status}`);
+      const data_ = await res.json();
+      if (!Array.isArray(data_.encoding) || data_.encoding.length !== 128) {
+        throw new Error('Invalid encoding response');
+      }
+      return data_;
     }
 
     async function similarity(a, b) {
       const res = await fetch(`${BAGLE_API}/api/v1/similarity`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'omit',
         body: JSON.stringify({ encoding_a: a, encoding_b: b }),
       });
-      return res.json();
+      if (!res.ok) throw new Error(`Similarity failed: ${res.status}`);
+      const data_ = await res.json();
+      if (typeof data_.similarity !== 'number' || !isFinite(data_.similarity)) {
+        throw new Error('Invalid similarity response');
+      }
+      return data_;
     }
 
     async function enroll() {
@@ -94,6 +108,7 @@
         alert('Type at least 10 keystrokes first');
         return;
       }
+      try {
       const result = await encode(intervals);
       baseline = result.encoding;
       document.getElementById('verifyBtn').disabled = false;
@@ -112,6 +127,12 @@
       lastKeyTime = null;
       input.value = '';
       countEl.textContent = '0';
+      } catch (err) {
+        document.getElementById('resultCard').style.display = 'block';
+        document.getElementById('resultValue').textContent = 'Error';
+        document.getElementById('resultValue').style.color = '#f87171';
+        document.getElementById('resultStatus').textContent = err.message;
+      }
     }
 
     async function verify() {
@@ -119,25 +140,32 @@
         alert('Type at least 10 keystrokes to verify');
         return;
       }
-      const result = await encode(intervals);
-      const sim = await similarity(baseline, result.encoding);
+      try {
+        const result = await encode(intervals);
+        const sim = await similarity(baseline, result.encoding);
 
-      const card = document.getElementById('resultCard');
-      card.style.display = 'block';
-      const pct = (sim.similarity * 100).toFixed(1);
-      const match = sim.similarity > 0.75;
-      document.getElementById('resultValue').textContent = `${pct}% match`;
-      document.getElementById('resultValue').style.color = match ? '#4ade80' : '#f87171';
-      document.getElementById('resultStatus').textContent = match
-        ? 'Identity verified — same typing rhythm'
-        : 'Different typing rhythm detected';
-      document.getElementById('coeffs').textContent =
-        result.encoding.map(v => v.toFixed(3)).join(', ');
+        const card = document.getElementById('resultCard');
+        card.style.display = 'block';
+        const pct = (sim.similarity * 100).toFixed(1);
+        const match = sim.similarity > 0.75;
+        document.getElementById('resultValue').textContent = `${pct}% match`;
+        document.getElementById('resultValue').style.color = match ? '#4ade80' : '#f87171';
+        document.getElementById('resultStatus').textContent = match
+          ? 'Identity verified — same typing rhythm'
+          : 'Different typing rhythm detected';
+        document.getElementById('coeffs').textContent =
+          result.encoding.map(v => v.toFixed(3)).join(', ');
 
-      intervals = [];
-      lastKeyTime = null;
-      input.value = '';
-      countEl.textContent = '0';
+        intervals = [];
+        lastKeyTime = null;
+        input.value = '';
+        countEl.textContent = '0';
+      } catch (err) {
+        document.getElementById('resultCard').style.display = 'block';
+        document.getElementById('resultValue').textContent = 'Error';
+        document.getElementById('resultValue').style.color = '#f87171';
+        document.getElementById('resultStatus').textContent = err.message;
+      }
     }
 
     function clearAll() {

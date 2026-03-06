@@ -1,7 +1,13 @@
 import { useState, useRef, useCallback } from 'react';
 
+// 10 seconds at 16 kHz — prevents OOM on long recordings
+const MAX_SAMPLES = 160000;
+
 /**
  * Hook to capture audio from the phone microphone.
+ *
+ * NOTE: Uses ScriptProcessorNode which is deprecated. For production apps,
+ * migrate to AudioWorklet (requires a separate worklet file).
  *
  * SWAP THIS for any sensor:
  *   - Accelerometer: use DeviceMotionEvent
@@ -32,6 +38,7 @@ export function useSensor() {
       samplesRef.current = [];
 
       processor.onaudioprocess = (e) => {
+        if (samplesRef.current.length >= MAX_SAMPLES) return;
         const data = e.inputBuffer.getChannelData(0);
         samplesRef.current.push(...data);
       };

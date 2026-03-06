@@ -63,6 +63,8 @@
   </div>
 
   <script>
+    // Configure your API endpoint. The default is a shared public instance.
+    // For production, deploy your own to avoid rate limits.
     const BAGLE_API = 'https://bagle-api.fly.dev';
     let redValues = [];
     let capturing = false;
@@ -184,19 +186,36 @@
     }
 
     async function encodePPG() {
-      const res = await fetch(`${BAGLE_API}/api/v1/encode`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ features: redValues }),
-      });
-      const data = await res.json();
+      try {
+        const res = await fetch(`${BAGLE_API}/api/v1/encode`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'omit',
+          body: JSON.stringify({ features: redValues }),
+        });
+        if (!res.ok) throw new Error(`Encode failed: ${res.status}`);
+        const data = await res.json();
+        if (!Array.isArray(data.encoding) || data.encoding.length !== 128) {
+          throw new Error('Invalid encoding response');
+        }
 
-      document.getElementById('resultCard').style.display = 'block';
-      document.getElementById('resultDim').textContent =
-        `${data.dim} coefficients = ${data.dim * 4} bytes`;
-      document.getElementById('resultInfo').textContent =
-        `Encoded ${redValues.length} PPG samples in ${data.latency_ms}ms`;
+        document.getElementById('resultCard').style.display = 'block';
+        document.getElementById('resultDim').textContent =
+          `${data.dim} coefficients = ${data.dim * 4} bytes`;
+        document.getElementById('resultInfo').textContent =
+          `Encoded ${redValues.length} PPG samples in ${data.latency_ms}ms`;
+      } catch (err) {
+        document.getElementById('resultCard').style.display = 'block';
+        document.getElementById('resultDim').textContent = 'Error';
+        document.getElementById('resultDim').style.color = '#f87171';
+        document.getElementById('resultInfo').textContent = err.message;
+      }
     }
+
+    // Cleanup camera on page unload
+    window.addEventListener('pagehide', () => {
+      if (capturing) stopCapture();
+    });
   </script>
 </body>
 </html>
