@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TypingID — GLE Typing Cadence Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, sans-serif; background: #0a0a0a; color: #e0e0e0; padding: 24px; }
+    h1 { font-size: 22px; text-align: center; margin-bottom: 8px; }
+    .subtitle { text-align: center; font-size: 13px; color: #888; margin-bottom: 24px; }
+    textarea { width: 100%; height: 120px; background: #141414; border: 1px solid #333; border-radius: 8px; color: #fff; padding: 12px; font-size: 16px; resize: none; }
+    textarea:focus { outline: none; border-color: #4ade80; }
+    .card { background: #141414; border: 1px solid #222; border-radius: 12px; padding: 16px; margin-top: 16px; }
+    .label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+    .value { font-size: 20px; font-weight: 700; color: #4ade80; margin-top: 4px; }
+    button { width: 100%; padding: 12px; border-radius: 8px; border: none; color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 12px; }
+    .btn-enroll { background: #2563eb; }
+    .btn-verify { background: #7c3aed; }
+    .btn-clear { background: #333; }
+    .status { text-align: center; margin-top: 8px; font-size: 13px; }
+    .coeffs { font-family: monospace; font-size: 10px; color: #555; word-break: break-all; margin-top: 8px; max-height: 60px; overflow: hidden; }
+  </style>
+</head>
+<body>
+  <h1>TypingID</h1>
+  <p class="subtitle">Your typing rhythm is unique. No mic. No camera. Just keystrokes.</p>
+
+  <textarea id="input" placeholder="Type anything here... your rhythm becomes your identity"></textarea>
+
+  <div class="card">
+    <div class="label">Keystrokes captured</div>
+    <div class="value" id="count">0</div>
+    <div class="label" style="margin-top:8px">Signal: inter-key intervals (ms)</div>
+  </div>
+
+  <button class="btn-enroll" id="enrollBtn" onclick="enroll()">Set as Baseline (Enroll)</button>
+  <button class="btn-verify" id="verifyBtn" onclick="verify()" disabled>Verify Identity</button>
+  <button class="btn-clear" onclick="clearAll()">Clear</button>
+
+  <div class="card" id="resultCard" style="display:none">
+    <div class="label">Result</div>
+    <div class="value" id="resultValue"></div>
+    <div class="status" id="resultStatus"></div>
+    <div class="coeffs" id="coeffs"></div>
+  </div>
+
+  <div style="text-align:center; margin-top:24px; font-size:11px; color:#444;">
+    Signal: keyboard timing &rarr; GLE encode &rarr; 128 coefficients &rarr; cosine similarity<br>
+    No breathing. No mic. Same encoder. Same network.
+  </div>
+
+  <script>
+    const BAGLE_API = 'https://bagle-api.fly.dev';
+    let intervals = [];
+    let lastKeyTime = null;
+    let baseline = null;
+
+    const input = document.getElementById('input');
+    const countEl = document.getElementById('count');
+
+    input.addEventListener('keydown', (e) => {
+      const now = performance.now();
+      if (lastKeyTime !== null) {
+        const interval = now - lastKeyTime;
+        if (interval < 2000) { // ignore pauses > 2s
+          intervals.push(interval);
+          countEl.textContent = intervals.length;
+        }
+      }
+      lastKeyTime = now;
+    });
+
+    async function encode(data) {
+      const res = await fetch(`${BAGLE_API}/api/v1/encode`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ features: data }),
+      });
+      return res.json();
+    }
+
+    async function similarity(a, b) {
+      const res = await fetch(`${BAGLE_API}/api/v1/similarity`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ encoding_a: a, encoding_b: b }),
+      });
+      return res.json();
+    }
+
+    async function enroll() {
+      if (intervals.length < 10) {
+        alert('Type at least 10 keystrokes first');
+        return;
+      }
+      const result = await encode(intervals);
+      baseline = result.encoding;
+      document.getElementById('verifyBtn').disabled = false;
+
+      const card = document.getElementById('resultCard');
+      card.style.display = 'block';
+      document.getElementById('resultValue').textContent = 'Baseline Set';
+      document.getElementById('resultValue').style.color = '#4ade80';
+      document.getElementById('resultStatus').textContent =
+        `${result.dim} coefficients from ${intervals.length} keystrokes (${result.latency_ms}ms)`;
+      document.getElementById('coeffs').textContent =
+        result.encoding.map(v => v.toFixed(3)).join(', ');
+
+      // Reset for next capture
+      intervals = [];
+      lastKeyTime = null;
+      input.value = '';
+      countEl.textContent = '0';
+    }
+
+    async function verify() {
+      if (intervals.length < 10) {
+        alert('Type at least 10 keystrokes to verify');
+        return;
+      }
+      const result = await encode(intervals);
+      const sim = await similarity(baseline, result.encoding);
+
+      const card = document.getElementById('resultCard');
+      card.style.display = 'block';
+      const pct = (sim.similarity * 100).toFixed(1);
+      const match = sim.similarity > 0.75;
+      document.getElementById('resultValue').textContent = `${pct}% match`;
+      document.getElementById('resultValue').style.color = match ? '#4ade80' : '#f87171';
+      document.getElementById('resultStatus').textContent = match
+        ? 'Identity verified — same typing rhythm'
+        : 'Different typing rhythm detected';
+      document.getElementById('coeffs').textContent =
+        result.encoding.map(v => v.toFixed(3)).join(', ');
+
+      intervals = [];
+      lastKeyTime = null;
+      input.value = '';
+      countEl.textContent = '0';
+    }
+
+    function clearAll() {
+      intervals = [];
+      lastKeyTime = null;
+      baseline = null;
+      input.value = '';
+      countEl.textContent = '0';
+      document.getElementById('resultCard').style.display = 'none';
+      document.getElementById('verifyBtn').disabled = true;
+    }
+  </script>
+</body>
+</html>

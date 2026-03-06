@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GaitSense — GLE Motion Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, sans-serif; background: #0a0a0a; color: #e0e0e0; padding: 24px; max-width: 480px; margin: 0 auto; }
+    h1 { font-size: 22px; text-align: center; margin-bottom: 8px; }
+    .subtitle { text-align: center; font-size: 13px; color: #888; margin-bottom: 24px; }
+    .card { background: #141414; border: 1px solid #222; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    .label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+    .value { font-size: 24px; font-weight: 700; color: #4ade80; margin-top: 4px; }
+    .live { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .axis { text-align: center; padding: 8px; background: #1a1a2e; border-radius: 8px; }
+    .axis-label { font-size: 10px; color: #666; }
+    .axis-val { font-size: 16px; font-weight: 600; font-family: monospace; }
+    button { width: 100%; padding: 14px; border-radius: 8px; border: none; color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; margin-bottom: 8px; }
+    .btn-start { background: #16a34a; }
+    .btn-stop { background: #dc2626; }
+    .btn-encode { background: #2563eb; }
+    canvas { width: 100%; height: 100px; border-radius: 8px; }
+    .footer { text-align: center; margin-top: 24px; font-size: 11px; color: #444; }
+  </style>
+</head>
+<body>
+  <h1>GaitSense</h1>
+  <p class="subtitle">Walk with your phone. Your gait becomes 128 numbers.</p>
+
+  <div class="card">
+    <div class="label">Accelerometer (live)</div>
+    <div class="live">
+      <div class="axis"><div class="axis-label">X</div><div class="axis-val" id="ax">—</div></div>
+      <div class="axis"><div class="axis-label">Y</div><div class="axis-val" id="ay">—</div></div>
+      <div class="axis"><div class="axis-label">Z</div><div class="axis-val" id="az">—</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="label">Magnitude over time</div>
+    <canvas id="waveform" width="400" height="100"></canvas>
+    <div style="margin-top:8px">
+      <span class="label">Samples: </span>
+      <span id="sampleCount" style="color:#4ade80; font-weight:600">0</span>
+    </div>
+  </div>
+
+  <button class="btn-start" id="startBtn" onclick="startCapture()">Start Walking Capture</button>
+  <button class="btn-stop" id="stopBtn" onclick="stopCapture()" style="display:none">Stop</button>
+  <button class="btn-encode" id="encodeBtn" onclick="encodeGait()" style="display:none">Encode → 128 Coefficients</button>
+
+  <div class="card" id="resultCard" style="display:none">
+    <div class="label">GLE Encoding Result</div>
+    <div class="value" id="resultDim"></div>
+    <div style="margin-top:4px; font-size:12px; color:#888" id="resultLatency"></div>
+  </div>
+
+  <div class="footer">
+    Signal: phone accelerometer magnitude &rarr; GLE encode &rarr; 128 coefficients<br>
+    No mic. No breathing. Same encoder. Same 512 bytes.
+  </div>
+
+  <script>
+    const BAGLE_API = 'https://bagle-api.fly.dev';
+    let samples = [];
+    let capturing = false;
+
+    function startCapture() {
+      samples = [];
+      capturing = true;
+      document.getElementById('startBtn').style.display = 'none';
+      document.getElementById('stopBtn').style.display = 'block';
+      document.getElementById('encodeBtn').style.display = 'none';
+      document.getElementById('resultCard').style.display = 'none';
+
+      if (window.DeviceMotionEvent && typeof DeviceMotionEvent.requestPermission === 'function') {
+        DeviceMotionEvent.requestPermission().then(state => {
+          if (state === 'granted') listenMotion();
+          else alert('Motion permission denied');
+        });
+      } else {
+        listenMotion();
+      }
+    }
+
+    function listenMotion() {
+      window.addEventListener('devicemotion', onMotion);
+    }
+
+    function onMotion(e) {
+      if (!capturing) return;
+      const a = e.accelerationIncludingGravity;
+      if (!a) return;
+
+      const x = a.x || 0, y = a.y || 0, z = a.z || 0;
+      const mag = Math.sqrt(x*x + y*y + z*z);
+      samples.push(mag);
+
+      document.getElementById('ax').textContent = x.toFixed(2);
+      document.getElementById('ay').textContent = y.toFixed(2);
+      document.getElementById('az').textContent = z.toFixed(2);
+      document.getElementById('sampleCount').textContent = samples.length;
+
+      drawWaveform();
+    }
+
+    function stopCapture() {
+      capturing = false;
+      window.removeEventListener('devicemotion', onMotion);
+      document.getElementById('stopBtn').style.display = 'none';
+      document.getElementById('startBtn').style.display = 'block';
+      if (samples.length > 10) {
+        document.getElementById('encodeBtn').style.display = 'block';
+      }
+    }
+
+    function drawWaveform() {
+      const canvas = document.getElementById('waveform');
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width, h = canvas.height;
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fillRect(0, 0, w, h);
+
+      if (samples.length < 2) return;
+
+      const visible = samples.slice(-w);
+      const max = Math.max(...visible, 15);
+
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let i = 0; i < visible.length; i++) {
+        const x = (i / visible.length) * w;
+        const y = h - (visible[i] / max) * h * 0.9;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    async function encodeGait() {
+      const res = await fetch(`${BAGLE_API}/api/v1/encode`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ features: samples }),
+      });
+      const data = await res.json();
+
+      document.getElementById('resultCard').style.display = 'block';
+      document.getElementById('resultDim').textContent =
+        `${data.dim} coefficients = ${data.dim * 4} bytes`;
+      document.getElementById('resultLatency').textContent =
+        `Encoded ${samples.length} accelerometer samples in ${data.latency_ms}ms`;
+    }
+  </script>
+</body>
+</html>
