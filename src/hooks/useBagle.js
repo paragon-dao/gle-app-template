@@ -5,14 +5,14 @@ const BAGLE_API = (import.meta.env?.VITE_BAGLE_API_URL || 'https://bagle-api.fly
 /**
  * WARNING — PRIVACY: This hook sends raw sensor data to an external server
  * (bagle-api.fly.dev) for encoding. If your app handles sensitive biometric
- * data, consider using @paragon-dao/bagle-sdk for on-device encoding instead,
+ * data, consider using @paragondao/bagle-sdk for on-device encoding instead,
  * so that raw samples never leave the user's machine.
  *
  * Hook for encoding signals and comparing encodings via BAGLE API.
  *
  * Two options:
  *   1. API encoding (this hook) — send samples to BAGLE API, get 128 coefficients back
- *   2. Local encoding — use gleEncodeSignal() from @paragon-dao/bagle-sdk for offline
+ *   2. Local encoding — use gleEncodeSignal() from @paragondao/bagle-sdk for offline
  *
  * For most apps, API encoding is simpler. Use local encoding for
  * privacy-sensitive apps where data should never leave the device.

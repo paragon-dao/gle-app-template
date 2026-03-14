@@ -65,11 +65,11 @@ The encoder is signal-agnostic. It doesn't know what sensor produced the data. E
 For privacy-sensitive apps, encode on-device without hitting the API:
 
 ```bash
-npm install @paragon-dao/bagle-sdk
+npm install @paragondao/bagle-sdk
 ```
 
 ```js
-import { gleEncodeSignal, cosineSimilarity } from '@paragon-dao/bagle-sdk';
+import { gleEncodeSignal, cosineSimilarity } from '@paragondao/bagle-sdk';
 
 const coefficients = gleEncodeSignal(samples);  // 128 coefficients, no network call
 const score = cosineSimilarity(a, b);           // compare locally
